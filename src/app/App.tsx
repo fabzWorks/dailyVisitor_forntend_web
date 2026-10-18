@@ -1,57 +1,52 @@
 'use client';
 
-import React, { useState } from 'react';
-import { DesktopFrame } from './components/layout/DesktopFrame';
-import { VisitorApp } from './components/visitor/VisitorApp';
-import { ResidentApp } from './components/resident/ResidentApp';
-import { LandingScreen } from './components/auth/LandingScreen';
-import { UnifiedLogin } from './components/auth/UnifiedLogin';
-import { UnifiedSignup } from './components/auth/UnifiedSignup';
-import { Toaster } from './components/ui/sonner';
-import type { SessionUser } from './lib/api';
+import React from 'react';
+import { DesktopFrame } from '@/components/templates';
+import { LandingScreen } from '@/features/auth/LandingScreen';
+import { UnifiedLogin } from '@/features/auth/UnifiedLogin';
+import { UnifiedSignup } from '@/features/auth/UnifiedSignup';
+import { VisitorApp } from '@/features/visitor/VisitorApp';
+import { ResidentApp } from '@/features/resident/ResidentApp';
+import { useAuthStore } from '@/store/authStore';
+import { useLogout } from '@/hooks/useAuth';
 
-// Which screen is open right now
-type View = 'landing' | 'login' | 'signup' | 'visitor-home' | 'resident-home';
-
+// ============================================================
+// App.tsx  -  decides which screen is open
+//
+//   not logged in  -> Landing / Login / Signup   (authStore.guestScreen says which)
+//   provider       -> VisitorApp
+//   resident       -> ResidentApp
+//
+// The logged-in user lives in store/authStore.ts
+// ============================================================
 export default function App() {
-  const [view, setView] = useState<View>('landing');
-  const [user, setUser] = useState<SessionUser | null>(null);   // the logged-in person
-
-  // login or signup worked -> remember the user and open his dashboard
-  const handleAuthSuccess = (loggedInUser: SessionUser) => {
-    setUser(loggedInUser);
-    setView(loggedInUser.role === 'provider' ? 'visitor-home' : 'resident-home');
-  };
-
-  const logout = () => {
-    setUser(null);
-    setView('landing');
-  };
+  const user = useAuthStore((s) => s.user);
+  const guestScreen = useAuthStore((s) => s.guestScreen);
+  const showGuestScreen = useAuthStore((s) => s.showGuestScreen);
+  const signIn = useAuthStore((s) => s.signIn);   // login or signup worked -> the right dashboard opens
+  const logout = useLogout();
 
   return (
-    <>
-      <DesktopFrame>
-        {view === 'landing' && (
-          <LandingScreen onLogin={() => setView('login')} onSignup={() => setView('signup')} />
-        )}
-        {view === 'login' && (
-          <UnifiedLogin
-            onBack={() => setView('landing')}
-            onGoSignup={() => setView('signup')}
-            onLoginSuccess={handleAuthSuccess}
-          />
-        )}
-        {view === 'signup' && (
-          <UnifiedSignup
-            onBack={() => setView('landing')}
-            onGoLogin={() => setView('login')}
-            onSignupSuccess={handleAuthSuccess}
-          />
-        )}
-        {view === 'visitor-home' && user && <VisitorApp user={user} onLogout={logout} />}
-        {view === 'resident-home' && user && <ResidentApp user={user} onLogout={logout} />}
-      </DesktopFrame>
-      <Toaster position="top-center" richColors />
-    </>
+    <DesktopFrame>
+      {!user && guestScreen === 'landing' && (
+        <LandingScreen onLogin={() => showGuestScreen('login')} onSignup={() => showGuestScreen('signup')} />
+      )}
+      {!user && guestScreen === 'login' && (
+        <UnifiedLogin
+          onBack={() => showGuestScreen('landing')}
+          onGoSignup={() => showGuestScreen('signup')}
+          onLoginSuccess={signIn}
+        />
+      )}
+      {!user && guestScreen === 'signup' && (
+        <UnifiedSignup
+          onBack={() => showGuestScreen('landing')}
+          onGoLogin={() => showGuestScreen('login')}
+          onSignupSuccess={signIn}
+        />
+      )}
+      {user?.role === 'provider' && <VisitorApp user={user} onLogout={logout} />}
+      {user?.role === 'resident' && <ResidentApp user={user} onLogout={logout} />}
+    </DesktopFrame>
   );
 }
